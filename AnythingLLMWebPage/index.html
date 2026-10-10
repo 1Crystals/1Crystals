@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnythingLLM 文档上传与向量化</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171b21; --panel2:#1e242c; --line:#2a323d;
+    --txt:#e6edf3; --muted:#8b97a5; --acc:#4f8cff; --ok:#3fb950;
+    --warn:#d29922; --err:#f85149;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:14px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:14px;background:var(--panel)}
+  header h1{font-size:17px;margin:0;font-weight:600}
+  header .sp{flex:1}
+  .badge{padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);color:var(--muted)}
+  .badge.on{color:var(--ok);border-color:var(--ok)}
+  .badge.off{color:var(--err);border-color:var(--err)}
+  .badge.busy{color:var(--warn);border-color:var(--warn)}
+  main{max-width:1080px;margin:0 auto;padding:24px;display:grid;gap:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+  .card h2{font-size:14px;margin:0 0 14px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:220px}
+  label{font-size:12px;color:var(--muted)}
+  input,select,textarea,button{font-family:inherit;font-size:13px}
+  input,select,textarea{background:var(--bg);border:1px solid var(--line);color:var(--txt);
+    padding:8px 10px;border-radius:6px;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--acc)}
+  button{background:var(--acc);color:#fff;border:0;padding:9px 18px;border-radius:6px;
+    cursor:pointer;font-weight:500}
+  button:hover{filter:brightness(1.1)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+  #drop{border:2px dashed var(--line);border-radius:10px;padding:36px;text-align:center;
+    cursor:pointer;transition:.15s;background:var(--panel2)}
+  #drop:hover,#drop.over{border-color:var(--acc);background:#1b2536}
+  .hint{color:var(--muted);font-size:12px;margin-top:10px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase}
+  tr:last-child td{border-bottom:0}
+  .tag{padding:2px 8px;border-radius:99px;font-size:11px;white-space:nowrap}
+  .tag.wait{background:#24303f;color:var(--muted)}
+  .tag.run{background:#2b2410;color:var(--warn)}
+  .tag.ok{background:#12261a;color:var(--ok)}
+  .tag.err{background:#2c1618;color:var(--err)}
+  .mono{font-family:Consolas,monospace;font-size:12px;color:var(--muted);word-break:break-all}
+  .bar{height:6px;background:var(--panel2);border-radius:99px;overflow:hidden;margin:10px 0 4px}
+  .bar>i{display:block;height:100%;background:var(--acc);width:0;transition:width .2s}
+  .log{max-height:280px;overflow:auto;background:var(--bg);border:1px solid var(--line);
+    border-radius:6px;padding:10px;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+  .kv span:nth-child(odd){color:var(--muted)}
+  .empty{color:var(--muted);font-size:13px;padding:10px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AnythingLLM 文档上传与向量化</h1>
+  <span class="sp"></span>
+  <span id="authBadge" class="badge">未连接</span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>连接配置</h2>
+    <div class="row">
+      <div class="field">
+        <label>服务器地址</label>
+        <input id="baseUrl" placeholder="http://localhost:3001">
+      </div>
+      <div class="field">
+        <label>API Key</label>
+        <input id="apiKey" type="password" placeholder="sk-...">
+      </div>
+      <button id="btnTest">测试连接</button>
+      <button id="btnRefreshWs" class="ghost">刷新工作区</button>
+    </div>
+    <div class="hint">
+      认证方式：<code>Authorization: Bearer &lt;API Key&gt;</code>（AnythingLLM 使用 Bearer 方案）。
+      配置保存在浏览器本地存储中。
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>目标工作区</h2>
+    <div class="row">
+      <div class="field">
+        <label>工作区（默认选中第一个）</label>
+        <select id="workspace"><option value="">加载中…</option></select>
+      </div>
+      <div class="field">
+        <label>文档当前向量数</label>
+        <input id="vecCount" readonly placeholder="—">
+      </div>
+      <button id="btnRefreshWs2" class="ghost">查看工作区文档</button>
+    </div>
+    <div id="wsMeta" class="hint"></div>
+  </section>
+
+  <section class="card">
+    <h2>上传文档</h2>
+    <div id="drop">
+      <strong>点击选择文件</strong> 或拖拽到此处<br>
+      <span class="hint" style="display:inline">支持批量上传，上传后自动完成向量化嵌入</span>
+    </div>
+    <input id="fileInput" type="file" multiple hidden>
+
+    <div class="row" style="margin-top:16px">
+      <div class="field"><label>标题 (title)</label><input id="mTitle" placeholder="留空则使用文件名"></div>
+      <div class="field"><label>作者 (docAuthor)</label><input id="mAuthor" placeholder="Unknown"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="field"><label>来源 (docSource)</label><input id="mSource" placeholder="来源说明"></div>
+      <div class="field"><label>描述 (description)</label><input id="mDesc" placeholder="文档摘要"></div>
+    </div>
+
+    <div class="row" style="margin-top:16px">
+      <button id="btnUpload" disabled>开始上传并向量化</button>
+      <button id="btnClear" class="ghost" disabled>清空列表</button>
+    </div>
+    <div class="bar"><i id="prog"></i></div>
+    <div class="hint" id="progText">尚未选择文件</div>
+  </section>
+
+  <section class="card">
+    <h2>上传结果</h2>
+    <table>
+      <thead><tr><th>文件</th><th>状态</th><th>字数</th><th>Token 估算</th><th>工作区</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="5" class="empty">暂无记录</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>工作区文档</h2>
+    <table>
+      <thead><tr><th>文档路径</th><th>标题</th><th>Token 估算</th><th>创建时间</th></tr></thead>
+      <tbody id="wsDocs"><tr><td colspan="4" class="empty">点击「查看工作区文档」加载</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>运行日志</h2>
+    <div class="log" id="log">就绪。</div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const STORE = 'allm.config';
+let files = [];
+let wsList = [];
+
+/* ---------- 配置 ---------- */
+function loadConfig(){
+  let c = {};
+  try { c = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch(e) {}
+  $('baseUrl').value = c.baseUrl || 'http://localhost:3001';
+  $('apiKey').value  = c.apiKey  || '';
+}
+function saveConfig(){
+  localStorage.setItem(STORE, JSON.stringify({
+    baseUrl: $('baseUrl').value.trim(), apiKey: $('apiKey').value.trim()
+  }));
+}
+function base(){ return $('baseUrl').value.trim().replace(/\/+$/,''); }
+function key(){  return $('apiKey').value.trim(); }
+
+function log(msg){
+  const t = new Date().toLocaleTimeString();
+  $('log').textContent += `\n[${t}] ${msg}`;
+  $('log').scrollTop = $('log').scrollHeight;
+}
+
+async function api(path, opts = {}){
+  const headers = { 'Authorization': 'Bearer ' + key() };
+  if (opts.json) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+  const res = await fetch(base() + '/api' + path, Object.assign({}, opts, { headers }));
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch(e) { data = text; }
+  if (!res.ok) {
+    const msg = (data && data.message) ? data.message : (typeof data === 'string' ? data : res.statusText);
+    throw new Error(`HTTP ${res.status} ${msg}`);
+  }
+  return data;
+}
+
+/* ---------- 连接 ---------- */
+function setBadge(cls, txt){ const b = $('authBadge'); b.className = 'badge ' + cls; b.textContent = txt; }
+
+async function testAuth(){
+  setBadge('busy', '连接中…');
+  try {
+    const r = await api('/v1/auth');
+    if (r && r.authenticated) { setBadge('on', '已认证'); log('认证成功 ✓'); return true; }
+    setBadge('off', '认证失败'); log('认证失败：响应 ' + JSON.stringify(r)); return false;
+  } catch(e) {
+    setBadge('off', '连接失败'); log('连接失败：' + e.message); return false;
+  }
+}
+
+/* ---------- 工作区 ---------- */
+async function loadWorkspaces(){
+  try {
+    const r = await api('/v1/workspaces');
+    wsList = (r && r.workspaces) || [];
+    const sel = $('workspace');
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if (!wsList.length) { sel.innerHTML = '<option value="">（无工作区）</option>'; return; }
+    wsList.forEach(w => {
+      const o = document.createElement('option');
+      o.value = w.slug; o.textContent = w.name + '  (' + w.slug + ')';
+      sel.appendChild(o);
+    });
+    // 默认选中第一个工作区
+    sel.value = wsList.some(w => w.slug === prev) ? prev : wsList[0].slug;
+    onWorkspaceChange();
+    log(`已加载 ${wsList.length} 个工作区，当前：${wsList[0].name}`);
+  } catch(e) { log('加载工作区失败：' + e.message); }
+}
+
+function onWorkspaceChange(){
+  const w = wsList.find(x => x.slug === $('workspace').value);
+  $('wsMeta').textContent = w
+    ? `ID ${w.id} · 创建于 ${w.createdAt} · 相似度阈值 ${w.similarityThreshold} · 模式 ${w.chatMode}`
+    : '';
+  const ok = !!w && files.length > 0;
+  $('btnUpload').disabled = !ok;
+}
+
+async function loadWorkspaceDocs(){
+  const slug = $('workspace').value;
+  if (!slug) return;
+  log('读取工作区文档：' + slug);
+  try {
+    const r = await api('/v1/workspace/' + encodeURIComponent(slug));
+    const w = Array.isArray(r.workspace) ? r.workspace[0] : r.workspace;
+    const docs = (w && w.documents) || [];
+    const tb = $('wsDocs');
+    tb.innerHTML = '';
+    if (!docs.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">该工作区暂无文档</td></tr>'; }
+    docs.forEach(d => {
+      let meta = {};
+      try { meta = JSON.parse(d.metadata || '{}'); } catch(e) {}
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="mono">${esc(d.docpath || d.filename || d.id)}</td>
+        <td>${esc(meta.title || d.filename || '-')}</td>
+        <td>${meta.token_count_estimate ?? '-'}</td>
+        <td class="mono">${esc(d.createdAt || '-')}</td>`;
+      tb.appendChild(tr);
+    });
+    log(`工作区现有 ${docs.length} 个文档`);
+  } catch(e) { log('读取工作区文档失败：' + e.message); }
+}
+
+async function loadVectorCount(){
+  try {
+    const r = await api('/v1/system/vector-count');
+    const n = r.vectorCount ?? r.vectors ?? r.count ?? '-';
+    $('vecCount').value = n;
+  } catch(e) { $('vecCount').value = '不可用'; }
+}
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+}
+
+/* ---------- 文件选择 ---------- */
+const drop = $('drop'), input = $('fileInput');
+drop.onclick = () => input.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => {
+  e.preventDefault(); drop.classList.remove('over');
+  addFiles([...e.dataTransfer.files]);
+};
+input.onchange = () => { addFiles([...input.files]); input.value = ''; };
+
+function addFiles(list){
+  const seen = new Set(files.map(f => f.name + ':' + f.size));
+  list.forEach(f => { if (!seen.has(f.name + ':' + f.size)) files.push(f); });
+  renderQueue();
+}
+
+function renderQueue(){
+  const body = $('rows');
+  body.innerHTML = '';
+  if (!files.length) { body.innerHTML = '<tr><td colspan="5" class="empty">暂无记录</td></tr>'; }
+  files.forEach((f, i) => {
+    const tr = document.createElement('tr');
+    tr.id = 'row' + i;
+    tr.innerHTML = `<td>${esc(f.name)}<div class="mono">${(f.size/1024).toFixed(1)} KB</div></td>
+      <td><span class="tag wait">等待中</span></td><td>-</td><td>-</td><td>-</td>`;
+    body.appendChild(tr);
+  });
+  $('prog').style.width = '0%';
+  $('progText').textContent = files.length ? `已选择 ${files.length} 个文件，等待上传` : '尚未选择文件';
+  $('btnUpload').disabled = !files.length || !$('workspace').value;
+  $('btnClear').disabled = !files.length;
+}
+
+function setRow(i, tag, cls, chunks, tokens, ws){
+  const el = $('row' + i); if (!el) return;
+  const tds = el.querySelectorAll('td');
+  tds[1].innerHTML = `<span class="tag ${cls}">${tag}</span>`;
+  tds[2].textContent = chunks;
+  tds[3].textContent = tokens;
+  tds[4].textContent = ws;
+}
+
+/* ---------- 上传 + 向量化 ---------- */
+function metadata(){
+  const m = {};
+  const put = (k,v) => { if (v.trim()) m[k] = v.trim(); };
+  put('title', $('mTitle').value);
+  put('docAuthor', $('mAuthor').value);
+  put('docSource', $('mSource').value);
+  put('description', $('mDesc').value);
+  return Object.keys(m).length ? m : null;
+}
+
+async function uploadOne(file, slug, meta){
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  // 关键参数：上传后自动嵌入到指定工作区（完成向量化）
+  fd.append('addToWorkspaces', slug);
+  if (meta) fd.append('metadata', JSON.stringify(meta));
+
+  let res = await fetch(base() + '/api/v1/document/upload', {
+    method: 'POST', headers: { 'Authorization': 'Bearer ' + key() }, body: fd
+  });
+  let data = await res.json().catch(() => null);
+
+  // 某些版本对 metadata 字段解析更严格，失败时去掉 metadata 重试一次
+  if (!res.ok && meta && res.status === 422) {
+    log(`  ${file.name}：携带 metadata 返回 ${res.status}，去掉 metadata 重试`);
+    const fd2 = new FormData();
+    fd2.append('file', file, file.name);
+    fd2.append('addToWorkspaces', slug);
+    res = await fetch(base() + '/api/v1/document/upload', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + key() }, body: fd2
+    });
+    data = await res.json().catch(() => null);
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${(data && data.message) || ''}`);
+  if (data && data.success === false) throw new Error((data.error && data.error.toString()) || '上传失败');
+  return data;
+}
+
+$('btnUpload').onclick = async () => {
+  const slug = $('workspace').value;
+  if (!slug) { alert('请先选择工作区'); return; }
+  saveConfig();
+  const meta = metadata();
+  const list = files.slice();
+
+  $('btnUpload').disabled = true;
+  $('btnClear').disabled = true;
+  let ok = 0, fail = 0;
+
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    setRow(i, '上传中', 'run', '-', '-', slug);
+    $('progText').textContent = `(${i+1}/${list.length}) 正在上传并向量化：${f.name}`;
+    log(`上传 ${f.name}`);
+    try {
+      const r = await uploadOne(f, slug, meta);
+      const d = (r.documents || [])[0] || {};
+      setRow(i, '已向量化', 'ok', d.wordCount ?? '-', d.token_count_estimate ?? '-', slug);
+      log(`  ✓ ${f.name} → ${d.location || d.name || 'ok'} (token≈${d.token_count_estimate ?? '?'}, ${d.wordCount ?? '?'} 词)`);
+      ok++;
+    } catch(e) {
+      setRow(i, '失败', 'err', '-', '-', '-');
+      log(`  ✗ ${f.name}：${e.message}`);
+      fail++;
+    }
+    $('prog').style.width = ((i + 1) / list.length * 100) + '%';
+  }
+
+  $('progText').textContent = `完成：成功 ${ok} 个，失败 ${fail} 个`;
+  files = files.filter(f => !list.includes(f));
+  renderQueue();
+  if (fail === 0) { files = []; renderQueue(); }
+  log(`全部结束：成功 ${ok}，失败 ${fail}`);
+  await loadVectorCount();
+  await loadWorkspaceDocs();
+  $('btnUpload').disabled = !files.length || !$('workspace').value;
+  $('btnClear').disabled = !files.length;
+};
+
+$('btnClear').onclick = () => { files = []; renderQueue(); };
+
+/* ---------- 绑定 ---------- */
+$('btnTest').onclick = async () => { saveConfig(); if (await testAuth()) await loadWorkspaces(); };
+$('btnRefreshWs').onclick = () => loadWorkspaces();
+$('btnRefreshWs2').onclick = () => loadWorkspaceDocs();
+$('workspace').onchange = onWorkspaceChange;
+['baseUrl','apiKey'].forEach(id => $(id).addEventListener('change', saveConfig));
+
+/* ---------- 启动 ---------- */
+loadConfig();
+renderQueue();
+(async () => {
+  if (!key()) { setBadge('off', '请填写 API Key'); log('请先填写 API Key 后点击「测试连接」'); return; }
+  if (await testAuth()) { await loadWorkspaces(); await loadVectorCount(); }
+})();
+</script>
+</body>
+</html>

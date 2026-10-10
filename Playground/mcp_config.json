@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "pet-hospital": {
+      "name": "pet-hospital-mcp",
+      "description": "Pet Hospital MCP Server - lists pets from the hospital API",
+      "serverUrl": "http://127.0.0.1:8081/mcp",
+      "transport": "streamable-http",
+      "protocolVersion": "2026-07-28",
+      "capabilities": {
+        "tools": {}
+      }
+    }
+  }
+}

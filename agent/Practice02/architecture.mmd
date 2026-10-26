@@ -1,0 +1,87 @@
+flowchart TD
+    subgraph Entry["入口层"]
+        User["用户输入"]
+        REPL["主循环 REPL<br/>file_tools.py:main loop"]
+    end
+
+    subgraph LLM["LLM 交互层"]
+        Client["OpenAI Client<br/>读取 config.ini"]
+        Chat["chat.completions.create<br/>tool_choice=auto"]
+        Router{"msg.tool_calls?"}
+    end
+
+    subgraph Dispatch["工具调度层"]
+        CallTool["call_tool(name, args_json)"]
+        Parse["json.loads 参数解析"]
+        Validate["参数校验<br/>TOOL_SPECS 必填检查"]
+        Allowed{"name ∈<br/>ALLOWED_TOOLS?"}
+        ErrJSON["返回: JSON 解析失败"]
+        ErrMiss["返回: 缺少参数"]
+        ErrUnknown["返回: 未知工具"]
+        ErrRun["返回: 执行出错"]
+    end
+
+    subgraph DateTools["原有工具"]
+        GetDate["getDate<br/>subprocess: date /t & time /t"]
+        Leap["isLeapYear<br/>闰年计算"]
+    end
+
+    subgraph FileTools["本地文件操作工具"]
+        GetCwd["getcwd<br/>os.getcwd"]
+        ListDir["listDir<br/>os.listdir"]
+        GetFileType["getFileType<br/>mimetypes.guess_type"]
+        ReadFile["readFile<br/>_read_text: utf-8/gbk 探测"]
+        CreateFile["createFile<br/>os.makedirs + write"]
+        EditFile["editFile<br/>str.replace 替换/删除"]
+        CreateDir["createDir<br/>os.makedirs"]
+        RemoveDir["removeDir<br/>shutil.rmtree"]
+        RemoveFile["removeFile<br/>os.remove"]
+        RenamePath["renamePath<br/>shutil.move"]
+    end
+
+    subgraph FS["本地文件系统"]
+        Dirs["目录"]
+        TextFiles["纯文本文件"]
+        BinFiles["二进制文件<br/>含 \\x00 拒绝读写"]
+    end
+
+    subgraph Output["输出层"]
+        ToolMsg["tool 消息回填<br/>messages + payload"]
+        Answer["打印 AI 回答"]
+    end
+
+    User --> REPL
+    REPL --> Client --> Chat --> Router
+    Router -->|"无 tool_calls"| Answer
+    Router -->|"有 tool_calls"| CallTool
+    CallTool --> Allowed
+    Allowed -->|"否"| ErrUnknown
+    Allowed -->|"是"| Parse
+    Parse -->|"失败"| ErrJSON
+    Parse -->|"成功"| Validate
+    Validate -->|"缺必填"| ErrMiss
+    Validate -->|"通过"| DateTools
+    Validate -->|"通过"| FileTools
+
+    GetDate -.->|"subprocess"| FS
+    GetCwd -.-> FS
+    ListDir --> Dirs
+    GetFileType --> TextFiles
+    ReadFile --> TextFiles
+    ReadFile -.->|"二进制判定"| BinFiles
+    CreateFile --> TextFiles
+    EditFile --> TextFiles
+    EditFile -.->|"二进制判定"| BinFiles
+    CreateDir --> Dirs
+    RemoveDir --> Dirs
+    RemoveFile --> TextFiles
+    RenamePath --> Dirs
+    RenamePath --> TextFiles
+
+    DateTools --> ToolMsg
+    FileTools --> ToolMsg
+    ErrUnknown --> ToolMsg
+    ErrJSON --> ToolMsg
+    ErrMiss --> ToolMsg
+    ErrRun -.-> ToolMsg
+    ToolMsg --> Chat

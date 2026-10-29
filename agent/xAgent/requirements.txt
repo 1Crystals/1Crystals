@@ -1,2 +1,4 @@
 openai
 textual
+requests
+beautifulsoup4

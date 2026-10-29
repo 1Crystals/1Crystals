@@ -91,6 +91,8 @@ def _read_text(path):
     required=["path"],
 )
 def readFile(path):
+    if isinstance(path, str) and path.strip().lower().startswith(("http://", "https://")):
+        return "【系统提示】传入的是 URL 链接，请调用网页抓取工具（如 searchWeb 或 fetch_web）处理，不要使用文件读取工具。"
     if not os.path.exists(path):
         return f"文件不存在：{path}"
     if os.path.isdir(path):

@@ -1,4 +1,4 @@
-from . import time_tools, file_tools  # noqa: F401  导入即完成工具注册
+from . import time_tools, file_tools, web_search_tools, cli_tools  # noqa: F401  导入即完成工具注册
 from .registry import call_tool, registry
 
 TOOLS = registry.schemas

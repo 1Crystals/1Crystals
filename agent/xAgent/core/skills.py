@@ -1,8 +1,9 @@
+import json
 import os
 import re
 from dataclasses import dataclass
 
-SKILL_DIR_NAMES = (".agentskills", ".agentslskills")
+SKILL_DIR_NAMES = (os.path.join(".agents", "skills"), ".agentskills", ".agentslskills")
 SKILL_FILE_NAME = "SKILL.md"
 
 _FRONTMATTER_KEY = re.compile(r"^([A-Za-z0-9_.-]+)\s*:\s*(.*)$")
@@ -97,6 +98,52 @@ def _is_within(path, base):
         return False
 
 
+def slugify_skill_name(name):
+    slug = re.sub(r"[^a-z0-9]+", "-", str(name).strip().lower())
+    return slug.strip("-")
+
+
+def _split_frontmatter(text):
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() in ("---", "..."):
+                meta = _parse_frontmatter(lines[1:i])
+                body = "\n".join(lines[i + 1:]).lstrip("\r\n")
+                return meta, body
+    return {}, text
+
+
+def _derive_description(body):
+    for line in body.splitlines():
+        text = line.strip()
+        if not text or text.startswith("#") or text.startswith("```"):
+            continue
+        text = re.sub(r"^[-*+]\s+", "", text)
+        return text[:200]
+    return ""
+
+
+def build_skill_document(name, context):
+    meta, body = _split_frontmatter(context)
+    description = (meta.get("description") or "").strip() or _derive_description(body)
+    if not description:
+        description = f"Skill {name}"
+    body = body.strip("\n")
+    lines = [
+        "---",
+        f"name: {json.dumps(name, ensure_ascii=False)}",
+        f"description: {json.dumps(description, ensure_ascii=False)}",
+        "---",
+        "",
+    ]
+    if body:
+        lines.append(body)
+        lines.append("")
+    return "\n".join(lines)
+
+
+
 class SkillManager:
     def __init__(self, root=None):
         self.root = os.path.abspath(root or os.getcwd())
@@ -145,6 +192,48 @@ class SkillManager:
             "You can also load additional files referenced by a skill."
         )
         return "\n".join(lines)
+
+    def create(self, name, context):
+        slug = slugify_skill_name(name)
+        if not slug:
+            return (
+                "【错误】Skill 名称无效。名称必须包含英文字母、数字或连字符，"
+                "例如 pdf-processing。"
+            )
+
+        existing = self.skills.get(slug)
+        if existing is not None:
+            return (
+                f"【错误】Skill `{slug}` 已存在：{existing.path}。"
+                "为避免覆盖原有内容，本次未创建任何文件。"
+            )
+
+        skills_root = os.path.join(self.root, ".agents", "skills")
+        target_dir = os.path.join(skills_root, slug)
+        if os.path.exists(target_dir):
+            return (
+                f"【错误】目标目录已存在：{target_dir}。"
+                "为避免覆盖原有内容，本次未创建任何文件。"
+            )
+
+        document = build_skill_document(slug, context)
+        try:
+            os.makedirs(target_dir)
+            with open(
+                os.path.join(target_dir, SKILL_FILE_NAME),
+                "w",
+                encoding="utf-8",
+                newline="\n",
+            ) as f:
+                f.write(document)
+        except OSError as e:
+            return f"【错误】创建 Skill 失败：{e}"
+
+        self.discover()
+        return (
+            f"已创建 Skill `{slug}`：{os.path.join(target_dir, SKILL_FILE_NAME)}\n"
+            f"可调用 loadSkill（name={slug}）加载完整说明。"
+        )
 
     def _resolve_file(self, skill, filename):
         filename = filename.replace("\\", os.sep).replace("/", os.sep)

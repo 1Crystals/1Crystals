@@ -1,5 +1,7 @@
+import os
 import re
 
+from .skills import reload_for
 from .tools import TOOLS, call_tool
 
 SYSTEM_PROMPT = "你是一个极简的AI助手。"
@@ -9,7 +11,9 @@ class Agent:
     def __init__(self, client, model, system_prompt=SYSTEM_PROMPT):
         self.client = client
         self.model = model
-        self.system_prompt = system_prompt
+        self.skills = reload_for(os.getcwd())
+        section = self.skills.system_prompt_section()
+        self.system_prompt = f"{system_prompt}\n\n{section}" if section else system_prompt
         self.reset()
 
     def reset(self):

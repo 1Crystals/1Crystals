@@ -10,18 +10,22 @@ class ToolSpec:
     properties: dict = field(default_factory=dict)
     required: tuple = ()
     handler: Callable[..., Any] = None
+    parameters: dict = None
 
     def to_schema(self) -> dict:
+        parameters = self.parameters
+        if parameters is None:
+            parameters = {
+                "type": "object",
+                "properties": self.properties,
+                "required": list(self.required),
+            }
         return {
             "type": "function",
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": {
-                    "type": "object",
-                    "properties": self.properties,
-                    "required": list(self.required),
-                },
+                "parameters": parameters,
             },
         }
 
@@ -42,6 +46,12 @@ class ToolRegistry:
             return handler
 
         return decorator
+
+    def add(self, spec: ToolSpec) -> None:
+        self._specs[spec.name] = spec
+
+    def names(self) -> list:
+        return list(self._specs)
 
     @property
     def schemas(self) -> list:

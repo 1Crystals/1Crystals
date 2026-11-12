@@ -319,6 +319,8 @@ class TUIApp(App, BaseUI):
     }
     #main {
         width: 1fr;
+        height: 1fr;
+        min-height: 10;
     }
     #log {
         height: 1fr;
@@ -331,6 +333,9 @@ class TUIApp(App, BaseUI):
         padding: 0 1 1 1;
         background: $panel;
         border-top: solid $accent;
+    }
+    #input-row Horizontal {
+        height: auto;
     }
     #prompt {
         width: 1fr;
